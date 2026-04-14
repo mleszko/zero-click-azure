@@ -8,6 +8,7 @@ class AgentState(TypedDict):
     required_facts: list[str]
     attempt: int
     max_attempts: int
+    settings: object
     draft_response: str
     approved: bool
     missing_facts: list[str]

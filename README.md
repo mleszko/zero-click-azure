@@ -234,9 +234,33 @@ API docs:
 
 - `http://localhost:8000/docs`
 
+Run tests:
+
+```bash
+pytest
+```
+
 ---
 
-## 8) Security and least-privilege highlights
+## 8) Optional Azure OpenAI integration (managed identity)
+
+The service supports an optional Azure OpenAI generation path with graceful fallback to the built-in rule-based generator.
+
+Configure these environment variables in `infra/main.parameters.json` (or override in deployment parameters):
+
+- `ENABLE_AZURE_OPENAI=true`
+- `AZURE_OPENAI_ENDPOINT=https://<your-openai-resource>.openai.azure.com`
+- `AZURE_OPENAI_DEPLOYMENT=<chat-deployment-name>`
+- `AZURE_OPENAI_API_VERSION=2024-06-01`
+- `AZURE_OPENAI_MANAGED_IDENTITY_CLIENT_ID=<optional-uami-client-id>`
+
+Recommended RBAC for least privilege:
+
+- Assign your Container App managed identity the `Cognitive Services OpenAI User` role scoped to the Azure OpenAI resource.
+
+---
+
+## 9) Security and least-privilege highlights
 
 - No Azure credentials hardcoded in source.
 - GitHub Actions uses OIDC (federated identity), not client secrets.
@@ -246,7 +270,7 @@ API docs:
 
 ---
 
-## 9) Cleanup
+## 10) Cleanup
 
 Delete the resource group:
 

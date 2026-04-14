@@ -55,6 +55,26 @@ param environmentVariables array = [
     name: 'DEFAULT_MODEL_NAME'
     value: 'rule-based-correction-graph'
   }
+  {
+    name: 'ENABLE_AZURE_OPENAI'
+    value: 'false'
+  }
+  {
+    name: 'AZURE_OPENAI_API_VERSION'
+    value: '2024-06-01'
+  }
+  {
+    name: 'AZURE_OPENAI_ENDPOINT'
+    value: ''
+  }
+  {
+    name: 'AZURE_OPENAI_DEPLOYMENT'
+    value: ''
+  }
+  {
+    name: 'AZURE_OPENAI_MANAGED_IDENTITY_CLIENT_ID'
+    value: ''
+  }
 ]
 
 @description('Optional resource tags.')

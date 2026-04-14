@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from core.llm import GenerationInput, LLMService
+from core.settings import Settings
+
 from .state import AgentState
 
 
@@ -11,27 +14,24 @@ def generate_response(state: AgentState) -> AgentState:
     """Create a candidate answer and incorporate grader feedback on retries."""
 
     next_attempt = state['attempt'] + 1
-    prompt = state['prompt'].strip()
-    required_facts = [fact.strip() for fact in state['required_facts'] if fact.strip()]
+    settings = state['settings']
+    if not isinstance(settings, Settings):
+        raise TypeError('Agent state settings must be a Settings instance.')
 
-    response_lines: list[str] = [f"Answer: {prompt}"]
-
-    if required_facts:
-        if next_attempt == 1 and len(required_facts) > 1:
-            facts_to_include = required_facts[:1]
-        else:
-            facts_to_include = required_facts
-
-        response_lines.append('Supporting facts:')
-        response_lines.extend(f"- {fact}" for fact in facts_to_include)
-
-    if state['feedback']:
-        response_lines.append(f"Correction applied: {state['feedback']}")
+    llm_service = LLMService(settings)
+    draft_response = llm_service.generate(
+        GenerationInput(
+            prompt=state['prompt'],
+            required_facts=state['required_facts'],
+            feedback=state['feedback'],
+            attempt=next_attempt,
+        )
+    )
 
     return {
         **state,
         'attempt': next_attempt,
-        'draft_response': '\n'.join(response_lines),
+        'draft_response': draft_response,
     }
 
 

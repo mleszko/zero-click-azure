@@ -31,6 +31,7 @@ def invoke_agent(
         'required_facts': payload.required_facts,
         'attempt': 0,
         'max_attempts': max_attempts,
+        'settings': settings,
         'draft_response': '',
         'approved': False,
         'missing_facts': [],
