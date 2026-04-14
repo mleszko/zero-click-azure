@@ -1,0 +1,152 @@
+name: Deploy Self-Correcting Agent
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - 'cursor/**'
+    paths:
+      - 'infra/**'
+      - 'app/**'
+      - '.github/workflows/deploy.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  LOCATION: ${{ vars.AZURE_LOCATION }}
+  PROJECT_NAME: ${{ vars.AZURE_PROJECT_NAME }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate required variables
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          : "${RESOURCE_GROUP:?Set repository variable AZURE_RESOURCE_GROUP}"
+          : "${LOCATION:?Set repository variable AZURE_LOCATION}"
+          : "${PROJECT_NAME:?Set repository variable AZURE_PROJECT_NAME}"
+
+      - name: Ensure resource group exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          az group create --name "$RESOURCE_GROUP" --location "$LOCATION" --output none
+
+      - name: Bootstrap infrastructure to create ACR and identity
+        id: bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          az config set extension.use_dynamic_install=yes_without_prompt --output none
+
+          BOOTSTRAP_DEPLOYMENT_NAME="bootstrap-${GITHUB_RUN_ID}"
+          BOOTSTRAP_IMAGE="mcr.microsoft.com/k8se/quickstart:latest"
+
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$BOOTSTRAP_DEPLOYMENT_NAME" \
+            --template-file infra/main.bicep \
+            --parameters \
+              @infra/main.parameters.json \
+              location="$LOCATION" \
+              projectName="$PROJECT_NAME" \
+              containerImage="$BOOTSTRAP_IMAGE" \
+            --output none
+
+          ACR_NAME=$(az deployment group show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$BOOTSTRAP_DEPLOYMENT_NAME" \
+            --query properties.outputs.acrName.value \
+            --output tsv)
+
+          ACR_LOGIN_SERVER=$(az deployment group show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$BOOTSTRAP_DEPLOYMENT_NAME" \
+            --query properties.outputs.acrLoginServer.value \
+            --output tsv)
+
+          CONTAINER_APP_NAME=$(az deployment group show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$BOOTSTRAP_DEPLOYMENT_NAME" \
+            --query properties.outputs.containerAppName.value \
+            --output tsv)
+
+          echo "acr_name=$ACR_NAME" >> "$GITHUB_OUTPUT"
+          echo "acr_login_server=$ACR_LOGIN_SERVER" >> "$GITHUB_OUTPUT"
+          echo "container_app_name=$CONTAINER_APP_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push container image with Azure CLI
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SHORT_SHA="${GITHUB_SHA::7}"
+          IMAGE_TAG="${SHORT_SHA}-${GITHUB_RUN_NUMBER}"
+          IMAGE_NAME="self-correcting-agent:${IMAGE_TAG}"
+
+          az acr build \
+            --registry "${{ steps.bootstrap.outputs.acr_name }}" \
+            --image "$IMAGE_NAME" \
+            ./app
+
+          IMAGE_URI="${{ steps.bootstrap.outputs.acr_login_server }}/$IMAGE_NAME"
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy final infrastructure revision with released image
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RELEASE_DEPLOYMENT_NAME="release-${GITHUB_RUN_ID}"
+
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$RELEASE_DEPLOYMENT_NAME" \
+            --template-file infra/main.bicep \
+            --parameters \
+              @infra/main.parameters.json \
+              location="$LOCATION" \
+              projectName="$PROJECT_NAME" \
+              containerImage="${{ steps.image.outputs.image_uri }}" \
+            --output none
+
+          APP_URL=$(az deployment group show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$RELEASE_DEPLOYMENT_NAME" \
+            --query properties.outputs.containerAppUrl.value \
+            --output tsv)
+
+          echo "app_url=$APP_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish deployment summary
+        shell: bash
+        run: |
+          {
+            echo "## Azure deployment complete"
+            echo "- Resource Group: $RESOURCE_GROUP"
+            echo "- Project Name: $PROJECT_NAME"
+            echo "- Container App: ${{ steps.bootstrap.outputs.container_app_name }}"
+            echo "- Image: ${{ steps.image.outputs.image_uri }}"
+            echo "- Endpoint: ${{ steps.release.outputs.app_url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
