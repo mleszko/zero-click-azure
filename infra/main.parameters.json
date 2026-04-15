@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus"
+    },
+    "projectName": {
+      "value": "selfcorragent"
+    },
+    "containerImage": {
+      "value": "mcr.microsoft.com/k8se/quickstart:latest"
+    },
+    "targetPort": {
+      "value": 8000
+    },
+    "minReplicas": {
+      "value": 0
+    },
+    "maxReplicas": {
+      "value": 3
+    },
+    "environmentVariables": {
+      "value": [
+        {
+          "name": "APP_ENV",
+          "value": "production"
+        },
+        {
+          "name": "LOG_LEVEL",
+          "value": "INFO"
+        },
+        {
+          "name": "MAX_CORRECTION_LOOPS",
+          "value": "3"
+        },
+        {
+          "name": "DEFAULT_MODEL_NAME",
+          "value": "rule-based-correction-graph"
+        },
+        {
+          "name": "ENABLE_AZURE_OPENAI",
+          "value": "false"
+        },
+        {
+          "name": "AZURE_OPENAI_ENDPOINT",
+          "value": ""
+        },
+        {
+          "name": "AZURE_OPENAI_API_VERSION",
+          "value": "2024-06-01"
+        },
+        {
+          "name": "AZURE_OPENAI_DEPLOYMENT",
+          "value": ""
+        },
+        {
+          "name": "AZURE_OPENAI_MANAGED_IDENTITY_CLIENT_ID",
+          "value": ""
+        }
+      ]
+    }
+  }
+}
